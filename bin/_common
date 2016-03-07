@@ -19,6 +19,7 @@ _msg() {
     Y=$( echo -e '\e[0;33m' )
     R=$( echo -e '\e[0m' )
 
+    t="$1"
     txt="${Y}$1${R}"
     type=$2
 
@@ -44,7 +45,7 @@ _msg() {
 
     fi
 
-    echo "[`date +'%Y:%m:%d__%H:%M:%S'`]$txt" >> $nginx_log_actions
+    echo "[`date +'%Y:%m:%d__%H:%M:%S'`]$t" >> $nginx_log_actions
 }
 
 
