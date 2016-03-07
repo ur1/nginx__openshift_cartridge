@@ -80,7 +80,7 @@ stop () {
 
         kill -QUIT $( cat "$pid" )
         wait_for_stop $( cat "$pid" ) &&
-            _msg "[OK]"                ':MSG_NO_TIME:'
+            _msg "[OK] stopped"    ':MSG_NO_TIME:'
     else
         _msg "$p not running!"
     fi
