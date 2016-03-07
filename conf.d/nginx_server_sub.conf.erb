@@ -1,0 +1,28 @@
+server {
+    listen  <%= ENV['OPENSHIFT_NGINX_IP'] %>:<%= ENV['OPENSHIFT_NGINX_PORT'] %>;
+    server_name _;  # <%= ENV['OPENSHIFT_APP_DNS'] %>;
+
+    access_log <%= ENV['OSC__NGINX_LOG_PREFIX'] %>access.log;
+
+    location / {
+        # is_alive_checker
+        if ( $remote_addr = "172.16.0.0/12" )   { set $test  "+"; }
+        if ( $http_user_agent = "Ruby" )        { set $test  "${test}+"; }
+        if ( $test = "++" )                     { access_log off; return 200; }
+        # end is_alive_checker
+
+
+        root <%= ENV['OPENSHIFT_DATA_DIR'] %>html;
+        index  index.html;
+    }
+
+    location /nginx_status {
+        # Turn on nginx stats
+        stub_status on;
+        # access_log off;
+
+        allow <%= ENV['OPENSHIFT_NGINX_IP'] %>;  # internal ip $OPENSHIFT_NGINX_IP
+
+        deny all;
+    }
+}

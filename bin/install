@@ -1,0 +1,76 @@
+#!/bin/bash
+# Prepare this instance of cartridge to be operational for the initial install
+#
+# run by openshift like ./install --version 1.2.3
+# 1.2.3 - get from manifest Version variable
+
+
+source ${OPENSHIFT_NGINX_DIR}bin/_common
+
+# for _msg function in _common file
+# this use for change formatting messages if this scripts run by rhc or openshift
+# 1 = show with prefixes for rhc
+export non_direct_request=1
+
+
+
+p="${global_pref}|install|"
+_msg "$p begin"
+
+
+# copy config for site
+mkdir -p ${OPENSHIFT_REPO_DIR}conf.d/
+
+cp -f ${OPENSHIFT_NGINX_DIR}conf.d/nginx_server_sub.conf.erb \
+        ${OPENSHIFT_REPO_DIR}conf.d/
+
+
+_render_conf
+
+
+# .bash_profile
+$( grep "${global_pref}" ${OPENSHIFT_DATA_DIR}.bash_profile &>/dev/null )
+if (( "$?" > "0" )) ; then
+
+    _msg "$p setup bash_aliases"
+
+    cat <<EOF > ${OPENSHIFT_DATA_DIR}.bash_profile
+#!/bin/bash
+
+# for _msg function in _common file
+# this use for change formatting messages if this scripts run by rhc or openshift
+# 1 = show with prefixes for rhc
+export non_direct_request=0
+
+# ${global_pref} cartridge
+source ${OPENSHIFT_NGINX_DIR}bin/_common
+
+alias la="ls -lah"
+alias ports="netstat -tulanp"
+
+
+#= ${global_pref} =========================================
+
+EOF
+
+
+    _msg "$p added .bash_profile"
+fi
+##############
+
+
+# copy logrotate script to cron dir
+_msg="$p logrotate scripts"
+cron_logrotate_dir=${OPENSHIFT_REPO_DIR}.openshift/cron/hourly/
+mkdir -p ${cron_logrotate_dir}
+
+if [ -f ${cron_logrotate_dir}logrotate.sh  ] ; then
+    cp -f ${OPENSHIFT_NGINX_DIR}conf.d/logrotate.sh ${cron_logrotate_dir}
+fi
+##############
+
+# install executed by openshift with params --version 1.2.3 from manifest.yml
+$nginx_real_install $2
+
+
+_msg "$p end"

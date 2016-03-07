@@ -1,0 +1,303 @@
+#!/bin/bash -e
+#
+
+
+source ${OPENSHIFT_NGINX_DIR}bin/_common
+
+nginx_version=$1
+
+p="${global_pref}|real_install|"
+_msg "$p begin $nginx_version"
+
+
+version_dir="${OPENSHIFT_NGINX_DIR}versions/${nginx_version}/"
+version_local_prefix="${version_dir}usr/local"
+version_sbin_path=${version_local_prefix}/bin/nginx
+
+
+## Set path to executable
+opt="$opt --sbin-path=${version_sbin_path}"
+#
+######
+
+
+if [ -x "$version_sbin_path" ] && [[ "$2" != "--force-reinstall" ]]; then
+    _msg "$p "
+    _msg "rhc ssh --app $OPENSHIFT_APP_NAME '\$nginx_real_install $nginx_version --force-reinstall'"
+    _msg "$p switch to version and exit wo compiling"
+
+    _msg "$p set PATH"
+    set_env_var \
+        OPENSHIFT_NGINX_PATH_ELEMENT \
+        $( dirname ${version_sbin_path} ) \
+        ${OPENSHIFT_NGINX_DIR}env/
+
+
+    _nginx_display_versions
+
+
+    _msg " "   ':MSG_NO_TIME:'
+    _msg "$p don't forget restart app - this will _actually_ change version "
+    _msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
+    _msg "rhc app-restart --app $OPENSHIFT_APP_NAME"                                    ':MSG_NO_TIME:'
+    _msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
+    _msg " "   ':MSG_NO_TIME:'
+
+    exit 0
+fi
+
+
+if [[ "$1" == "--force-reinstall" ]]; then
+    _msg "$p before 'make install':"
+    [[ "$nginx_version" == "$( _get_nginx_ver_cleaned )" ]] &&
+        _msg " - stop cartridge "                   ':MSG_NO_TIME:'
+
+    _msg " - delete version $nginx_version"    ':MSG_NO_TIME:'
+fi
+
+
+
+SRC_DIR="${OPENSHIFT_TMP_DIR}nginx_cartridge/"
+mkdir -p "$SRC_DIR"
+
+
+## Module PCRE
+#
+_msg "$p PCRE start"
+pcre_ver=${PCRE_VERSION:-8.38}
+pcre_file=pcre-$pcre_ver.tar.gz
+pcre_url=ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$pcre_file
+
+cd $SRC_DIR
+curl -sOL $pcre_url
+tar zxf $pcre_file && rm -f $pcre_file
+
+opt="$opt --with-pcre=${SRC_DIR}pcre-${pcre_ver}"
+
+_msg "$p PCRE end $pcre_ver"
+###########
+
+
+nginx_ver=${nginx_version}
+nginx_file=nginx-$nginx_ver.tar.gz
+nginx_url=http://nginx.org/download/$nginx_file
+
+
+cd $SRC_DIR
+curl -sO $nginx_url
+tar zxf $nginx_file && rm -f $nginx_file
+_msg "$p download $nginx_ver"
+
+
+
+cd ${SRC_DIR}nginx-${nginx_ver}/
+
+
+_msg "$p configure begin"
+
+# for reading
+# http://nginx.org/en/linux_packages.html#arguments
+
+## Not tested MAGIC from https://gist.github.com/tollmanz/8662688
+#
+#    opt="$opt --with-cc-opt='-g -O2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2'"
+#    opt="$opt --with-ld-opt='-Wl,-z,relro -Wl,--as-needed'"
+#
+#    this works fine
+#
+     opt="$opt --with-cpu-opt=generic"
+#
+######
+
+
+## Module ssl
+#
+# For openshift this values not useful because ssl cert placed on outer service
+#
+# for http_ssl_module
+# sudo apt-get install libssl-dev
+#
+# https://www.openssl.org/source/openssl-1.0.2g.tar.gz
+#
+# 1.9.11 can find this lib
+#
+# opt="$opt --with-openssl='/usr/lib64/libssl.so'"
+# opt="$opt --with-http_ssl_module"
+#
+# or not tested config
+#
+#    wget http://www.openssl.org/source/openssl-1.0.1g.tar.gz
+#    tar -xzvf openssl-1.0.1g.tar.gz
+#    opt="$opt --with-openssl=PATH_TO/sources/openssl-1.0.1g"
+#
+#   Now just system openssl
+#    opt="$opt --with-openssl=/usr/lib64/libssl.so"
+
+#####
+
+
+## Modules for http speedups
+# 1.8-1.9
+# opt="$opt --with-http_spdy_module"
+#
+# 1.9+
+#    opt="$opt --with-http_v2_module"
+#####
+
+
+## Module google pagespeed
+# https://developers.google.com/speed/pagespeed/module/build_ngx_pagespeed_from_source
+#
+# not tested config
+#
+#    cd ~/sources
+#    wget https://github.com/pagespeed/ngx_pagespeed/archive/v1.7.30.4-beta.zip
+#    unzip v1.7.30.4-beta.zip
+#    cd ngx_pagespeed-1.7.30.4-beta
+#    wget https://dl.google.com/dl/page-speed/psol/1.7.30.4.tar.gz
+#    tar -xzvf 1.7.30.4.tar.gz
+#
+#    opt="$opt --add-module=$HOME/sources/ngx_pagespeed-1.7.30.4-beta"
+#
+########
+
+## Fine tuning specs
+# > 1.9
+# https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/
+#
+    opt="$opt --with-threads" # speedup request processing on hiload
+
+# speedup static files
+# http://nginx.org/en/docs/http/ngx_http_core_module.html#aio
+#
+    opt="$opt --with-file-aio"
+
+#
+# http://nginx.org/en/docs/http/ngx_http_slice_module.html
+#   opt="$opt --with-http_slice_module"
+#
+###
+
+opt="$opt --with-ipv6"
+
+
+opt="$opt --with-http_realip_module"
+opt="$opt --with-http_stub_status_module"
+opt="$opt --with-http_secure_link_module"
+opt="$opt --with-http_auth_request_module"
+
+
+opt="$opt --with-http_gzip_static_module"
+
+
+## Module http_image_filter_module
+#
+# sudo apt-get install libgd-dev
+#
+#   now use system libgb
+    opt="$opt --with-http_image_filter_module"
+
+#########
+
+
+
+## Config path and config rendering
+#
+# if need custom path to config change this
+# --prefix + /conf/nginx.conf = path to config
+#
+# prefix not ended with /
+    nginx_conf="${version_local_prefix}/conf/nginx.conf"
+
+    opt="$opt --conf-path=${nginx_conf}"
+#########
+
+
+mkdir -p "$version_local_prefix"
+
+
+./configure \
+    --prefix="$version_local_prefix" \
+    --pid-path="${OSC__NGINX_PID}" \
+    --error-log-path="${OSC__NGINX_LOG_PREFIX}error.log" \
+    --http-log-path="${OSC__NGINX_LOG_PREFIX}access.log" \
+    --without-http_ssi_module \
+    --without-http_autoindex_module \
+    --without-http_geo_module \
+    --without-http_fastcgi_module \
+    --without-http_scgi_module \
+    --without-http_memcached_module \
+    --without-mail_pop3_module \
+    --without-mail_imap_module \
+    --without-mail_smtp_module \
+    $opt >>$nginx_log_actions 2>&1
+
+
+_msg "$p configure end"
+
+
+_msg "$p make begin"
+make >>$nginx_log_actions 2>&1
+_msg "$p make end"
+
+
+if [[ "$1" == "--force-reinstall" ]]; then
+    [[ "$nginx_version" == "$( _get_nginx_ver_cleaned )" ]] &&
+        $nginx_control stop
+
+    _msg "$p delete version $nginx_version"
+    rm -rf "$version_dir" &&
+        _msg "deleted"
+fi
+
+## Config path and config rendering
+#
+# if need custom path to config change this
+# --prefix + /conf/nginx.conf = path to config
+#
+    _msg "$p render main nginx config ~/${nginx_conf#$OPENSHIFT_HOMEDIR}"
+    mkdir -p "$( dirname $nginx_conf )"
+
+    oo-erb "${OPENSHIFT_NGINX_DIR}conf.d/nginx.conf.erb" \
+            > "$nginx_conf"
+
+#########
+
+
+_msg "$p do make install"
+make install >>$nginx_log_actions 2>&1
+
+
+#_msg "$p do make clean"
+#make clean >>$nginx_log_actions 2>&1
+
+
+# log writes to OPENSHIFT_DATA_DIR/nginx
+rm -rf "${version_local_prefix}/logs"
+
+
+rm -rf "${SRC_DIR}"
+
+
+_msg "$p copy html to DATA_DIR"
+cp -rf  ${version_local_prefix}/html ${OPENSHIFT_DATA_DIR}
+
+
+_nginx_display_versions
+
+_msg " "   ':MSG_NO_TIME:'
+_msg "$p don't forget restart app - this will _actually_ change version "
+_msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
+_msg "rhc app-restart --app $OPENSHIFT_APP_NAME"                                    ':MSG_NO_TIME:'
+_msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
+_msg " "   ':MSG_NO_TIME:'
+
+
+_msg "$p set _PATH_ELEMENT"
+set_env_var \
+    OPENSHIFT_NGINX_PATH_ELEMENT \
+    $( dirname ${version_sbin_path} ) \
+    ${OPENSHIFT_NGINX_DIR}env/
+
+
+_msg "$p end "

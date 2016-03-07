@@ -1,0 +1,113 @@
+#!/bin/bash -e
+
+# https://github.com/openshift/origin-server/blob/master/node/misc/usr/lib/cartridge_sdk/bash/sdk
+source $OPENSHIFT_CARTRIDGE_SDK_BASH
+
+# not delete
+# env variable not do thing right!
+global_pref="Nginx"
+
+nginx_log_actions=${OSC__NGINX_LOG_PREFIX}actions.log
+
+
+_msg() {
+    local txt
+    local type
+    local Y
+    local R
+
+    Y=$( echo -e '\e[0;33m' )
+    R=$( echo -e '\e[0m' )
+
+    txt="${Y}$1${R}"
+    type=$2
+
+
+
+    if [[ "${non_direct_request}" == '1' ]]; then
+
+        case ${type} in
+            ':RESULT:')         client_result   "$txt";;
+            ':MSG_NO_TIME:')    client_message  "$txt";;
+            ':MSG:')            client_message  "[$( date +'%H:%M:%S_%3N' )]$txt";;
+            *)                  client_message  "[$( date +'%H:%M:%S_%3N' )]$txt";;
+        esac
+
+    else
+        # use in case 'rhc ssh'
+        case ${type} in
+            ':RESULT:')         echo "$txt";;
+            ':MSG_NO_TIME:')    echo "$txt";;
+            ':MSG:')            echo "[$( date +'%H:%M:%S_%3N' )]$txt";;
+            *)                  echo "[$( date +'%H:%M:%S_%3N' )]$txt";;
+        esac
+
+    fi
+
+    echo "[`date +'%Y:%m:%d__%H:%M:%S'`]$txt" >> $nginx_log_actions
+}
+
+
+
+# Just in case
+_get_nginx_ver_cleaned () {
+    local _ver_raw
+
+    if hash nginx 2>/dev/null; then
+        _ver_raw="$( nginx -v 2>&1 )"
+        echo "${_ver_raw#nginx version: nginx/}"
+    else
+        echo "~0"
+    fi
+}
+
+
+
+_nginx_version_in_path () {
+    echo $( echo $PATH| grep -oe 'nginx/versions/\([0-9.]*\)' | awk -F'nginx/versions/' '{print $2}' )
+}
+
+
+
+_nginx_display_versions () {
+        _msg " "           ':MSG_NO_TIME:'
+        _msg "## Software versions ##############################"      ':MSG_NO_TIME:'
+        _msg "nginx -v=$( _get_nginx_ver_cleaned )"                     ':MSG_NO_TIME:'
+        _msg "version in PATH =$( _nginx_version_in_path )"             ':MSG_NO_TIME:'
+        _msg "versions list >| $( ls -1 ${OPENSHIFT_NGINX_DIR}versions | tr '\n' ' ' )|<"      ':MSG_NO_TIME:'
+        _msg "## Software versions ##############################"      ':MSG_NO_TIME:'
+        _msg " "           ':MSG_NO_TIME:'
+
+}
+# when hit in bash/ssh '${cart_name}_display_versions'
+# this will touch env variable in env/{cart_name}_display_versions.erb
+# which run ./_common {cart_name}_display_versions
+#
+# that's because ssh hardcoded to non interactive mode and I can't use aliases for that
+[[ "$1" == 'nginx_display_versions' ]] && _nginx_display_versions
+
+
+get_nginx_stats () {
+    echo "============================================================"
+    echo "$( curl -s --max-time 2 http://$OPENSHIFT_NGINX_IP:$OPENSHIFT_NGINX_PORT/nginx_status )"
+    echo "============================================================"
+}
+
+
+
+_render_conf () {
+    local p
+    p="${local_pref}_render_conf|"
+    _msg "$p begin"
+
+    for f in $( ls ${OPENSHIFT_REPO_DIR}conf.d/*.erb 2>/dev/null ) ; do
+        # config compilation may fall if env variable not present
+
+        _msg "$p render config $( echo $f | sed "s|$OPENSHIFT_HOMEDIR|~/|g" )"
+        _msg "$( oo-erb "$f" > "${f%.erb}" 2>&1 || true )"
+
+    done
+
+    _msg "$p end"
+}
+

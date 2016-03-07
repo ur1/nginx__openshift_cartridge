@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# https://docs.openshift.org/origin-m4/oo_cartridge_developers_guide.html#bin-control
+# control <action>
+# The control script allows OpenShift or user to control the state of the cartridge.
+
+source ${OPENSHIFT_NGINX_DIR}bin/_common
+
+# for _msg function in _common file
+# this use for change formatting messages if this scripts run by rhc or openshift
+# 1 = show with prefixes for rhc
+export non_direct_request=1
+
+
+local_pref="${global_pref}|control|"
+
+
+start () {
+    local p
+    p="${local_pref}start|"
+
+    _msg "$p begin"
+
+    _nginx_display_versions
+
+    if ! hash nginx 2>/dev/null ; then
+
+        _msg " "          ':MSG_NO_TIME:'
+        _msg "## Manual input instructions #############################################"       ':MSG_NO_TIME:'
+        _msg "rhc ssh --app $OPENSHIFT_APP_NAME '\$nginx_real_install 1.9.11' --force-install"  ':MSG_NO_TIME:'
+        _msg "More info in interactive log"                                                     ':MSG_NO_TIME:'
+        _msg "rhc tail -f ${nginx_log_actions#$OPENSHIFT_HOMEDIR} --app $OPENSHIFT_APP_NAME"    ':MSG_NO_TIME:'
+        _msg "## Manual input instructions #############################################"       ':MSG_NO_TIME:'
+        _msg " "          ':MSG_NO_TIME:'
+
+        _msg "$p end"
+
+        exit 0
+    fi
+
+    local pid
+    pid="$OSC__NGINX_PID"
+
+
+    if pgrep "nginx" >/dev/null && [ -f "$pid" ]; then
+        _msg "$p [OK] already running"      ':MSG_NO_TIME:'
+    else
+        _render_conf
+
+        _msg "$p nginx test config begin"
+        _msg "$( nginx -t )"    ':MSG_NO_TIME:'
+        _msg "$p nginx test config end"
+
+        # nginx will always use the prefix defined
+        # at compile time unless an absolute path to the conf file is given
+        _msg "$( nginx )"    ':MSG_NO_TIME:'
+
+        wait_for_pid_file $pid &&
+            _msg "[OK] started"  ':MSG_NO_TIME:'
+    fi
+
+    _msg "$p pid=\"$( cat $pid )\""
+
+    _msg "$p end"
+}
+
+
+stop () {
+    local p
+    local pid
+
+    p="${local_pref}stop|"
+    pid="$OSC__NGINX_PID"
+
+    _msg "$p begin"
+
+    if pgrep "nginx" >/dev/null && [ -f "$pid" ]; then
+        # do with 'kill' not with 'nginx -s stop'
+        # because exec can be not in PATH
+
+        kill -QUIT $( cat "$pid" )
+        wait_for_stop $( cat "$pid" ) &&
+            _msg "[OK]"                ':MSG_NO_TIME:'
+    else
+        _msg "$p not running!"
+    fi
+
+    rm -rf ${pid} &&
+        _msg "$p clean pid-file"
+
+    _msg "$p end"
+}
+
+
+
+status () {
+    $( curl -s --max-time 2 http://$OPENSHIFT_NGINX_IP:$OPENSHIFT_NGINX_PORT/nginx_status )
+    return $?
+}
+
+
+reload () {
+    local p
+    local pid
+
+    pid="$OSC__NGINX_PID"
+    p="${local_pref}reload|"
+
+    _msg "$p begin"
+
+    if pgrep "nginx" >/dev/null && [ -f "$pid" ]; then
+        _msg "reload wo re rendering main config"
+        kill -HUP $( cat $pid )
+    else
+        _msg "$p Cannot reload Nginx - not running. Just start"
+        start
+    fi
+    _msg "$p end"
+}
+
+
+tidy () {
+    local p
+    p="${local_pref}tidy|"
+    _msg "$p begin"
+
+    rm -f ${OSC__NGINX_LOG_PREFIX}*
+
+    _msg "$p end"
+}
+
+
+_msg "${global_pref} DO >$1<"
+
+
+
+# https://docs.openshift.org/origin-m4/oo_cartridge_developers_guide.html#bin-control
+
+case "$1" in
+start)     start ;;
+stop)      stop ;;
+status)    status ;;
+restart)   stop; start ;;
+reload)    reload ;;
+tidy)      tidy ;;
+*)         exit 0
+esac
