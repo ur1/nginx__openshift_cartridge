@@ -286,16 +286,6 @@ _msg "$p copy html to DATA_DIR"
 cp -rf  ${version_local_prefix}/html ${OPENSHIFT_DATA_DIR}
 
 
-_nginx_display_versions
-
-_msg " "   ':MSG_NO_TIME:'
-_msg "$p don't forget restart app - this will _actually_ change version "
-_msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
-_msg "rhc app-restart --app $OPENSHIFT_APP_NAME"                                    ':MSG_NO_TIME:'
-_msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
-_msg " "   ':MSG_NO_TIME:'
-
-
 _msg "$p set _PATH_ELEMENT"
 set_env_var \
     OPENSHIFT_NGINX_PATH_ELEMENT \
@@ -304,3 +294,12 @@ set_env_var \
 
 
 _msg "$p end "
+
+_nginx_display_versions
+
+_msg " "   ':MSG_NO_TIME:'
+_msg "Don't forget restart app - this will _actually_ change version "              ':MSG_NO_TIME:'
+_msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
+_msg "rhc app-restart --app $OPENSHIFT_APP_NAME"                                    ':MSG_NO_TIME:'
+_msg "## Manual input instructions #############################################"   ':MSG_NO_TIME:'
+_msg " "   ':MSG_NO_TIME:'
