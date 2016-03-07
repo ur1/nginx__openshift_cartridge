@@ -24,7 +24,8 @@ start () {
     _nginx_display_versions
 
     if ! hash nginx 2>/dev/null ; then
-
+        _msg "${global_pref} cart not started properly"
+        _msg "Check logs"
         _msg " "          ':MSG_NO_TIME:'
         _msg "## Manual input instructions #############################################"       ':MSG_NO_TIME:'
         _msg "rhc ssh --app $OPENSHIFT_APP_NAME '\$nginx_real_install 1.9.11' --force-install"  ':MSG_NO_TIME:'
@@ -48,12 +49,12 @@ start () {
         _render_conf
 
         _msg "$p nginx test config begin"
-        _msg "$( nginx -t )"    ':MSG_NO_TIME:'
+        _msg "$( nginx -t 2>&1 )"    ':MSG_NO_TIME:'
         _msg "$p nginx test config end"
 
         # nginx will always use the prefix defined
         # at compile time unless an absolute path to the conf file is given
-        _msg "$( nginx )"    ':MSG_NO_TIME:'
+        _msg "nginx at start say >|$( nginx 2>&1 )|<"    ':MSG_NO_TIME:'
 
         wait_for_pid_file $pid &&
             _msg "[OK] started"  ':MSG_NO_TIME:'

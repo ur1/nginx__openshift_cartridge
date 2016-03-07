@@ -5,6 +5,9 @@
 source ${OPENSHIFT_NGINX_DIR}bin/_common
 
 nginx_version=$1
+is_force_reinstall=$2
+
+
 
 p="${global_pref}|real_install|"
 _msg "$p begin $nginx_version"
@@ -21,7 +24,7 @@ opt="$opt --sbin-path=${version_sbin_path}"
 ######
 
 
-if [ -x "$version_sbin_path" ] && [[ "$2" != "--force-reinstall" ]]; then
+if [ -x "$version_sbin_path" ] && [[ "$is_force_reinstall" != "--force-reinstall" ]]; then
     _msg "$p "
     _msg "rhc ssh --app $OPENSHIFT_APP_NAME '\$nginx_real_install $nginx_version --force-reinstall'"
     _msg "$p switch to version and exit wo compiling"
@@ -47,7 +50,7 @@ if [ -x "$version_sbin_path" ] && [[ "$2" != "--force-reinstall" ]]; then
 fi
 
 
-if [[ "$1" == "--force-reinstall" ]]; then
+if [[ "$is_force_reinstall" == "--force-reinstall" ]]; then
     _msg "$p before 'make install':"
     [[ "$nginx_version" == "$( _get_nginx_ver_cleaned )" ]] &&
         _msg " - stop cartridge "                   ':MSG_NO_TIME:'
@@ -241,7 +244,7 @@ make >>$nginx_log_actions 2>&1
 _msg "$p make end"
 
 
-if [[ "$1" == "--force-reinstall" ]]; then
+if [[ "$is_force_reinstall" == "--force-reinstall" ]]; then
     [[ "$nginx_version" == "$( _get_nginx_ver_cleaned )" ]] &&
         $nginx_control stop
 
