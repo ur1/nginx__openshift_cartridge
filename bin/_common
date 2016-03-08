@@ -7,8 +7,10 @@ source $OPENSHIFT_CARTRIDGE_SDK_BASH
 # env variable not do thing right!
 global_pref="Nginx"
 
-nginx_log_actions=${OSC__NGINX_LOG_PREFIX}actions.log
 
+# put all cart logs to one file
+# memcached_log_actions=${OPENSHIFT_LOG_DIR}cart__actions.log
+nginx_log_actions=${OPENSHIFT_LOG_DIR}cart__actions.log
 
 _msg() {
     local txt
