@@ -73,4 +73,7 @@ fi
 $nginx_real_install $2
 
 
+find $OPENSHIFT_NGINX_DIR -iname '.gitkeep' -delete
+
+
 _msg "$p end"

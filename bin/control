@@ -24,7 +24,8 @@ start () {
     _nginx_display_versions
 
     if ! hash nginx 2>/dev/null ; then
-        _msg "${global_pref} cart not started properly"
+        _msg "${global_pref} ccart can not started properly"
+        _msg "Problem occurred during installation"
         _msg "Check logs"
         _msg " "          ':MSG_NO_TIME:'
         _msg "## Manual input instructions #############################################"       ':MSG_NO_TIME:'
