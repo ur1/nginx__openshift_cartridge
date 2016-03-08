@@ -44,7 +44,7 @@ start () {
 
 
     if pgrep "nginx" >/dev/null && [ -f "$pid" ]; then
-        _msg "$p [OK] already running"      ':MSG_NO_TIME:'
+        _msg "$p [OK] already running"      ':RESULT:'
     else
         _render_conf
 
@@ -57,7 +57,7 @@ start () {
         _msg "nginx at start say >|$( nginx 2>&1 )|<"    ':MSG_NO_TIME:'
 
         wait_for_pid_file $pid &&
-            _msg "[OK] started"  ':MSG_NO_TIME:'
+            _msg "$p [OK] started"  ':RESULT:'
     fi
 
     _msg "$p pid=\"$( cat $pid )\""
@@ -81,7 +81,7 @@ stop () {
 
         kill -QUIT $( cat "$pid" )
         wait_for_stop $( cat "$pid" ) &&
-            _msg "[OK] stopped"    ':MSG_NO_TIME:'
+            _msg "$p [OK] stopped"    ':RESULT:'
     else
         _msg "$p not running!"
     fi
